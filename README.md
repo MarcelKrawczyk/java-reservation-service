@@ -55,12 +55,12 @@ Errors are returned as JSON: `status`, `error`, `message`, `timestamp`, `path`.
 ## Running
 
 ```bash
-mvn spring-boot:run     # JDK 21 and Maven required
+mvn spring-boot:run     # JDK 21 or newer, and Maven
 ```
 
 There is no `application.properties`, so Spring Boot defaults apply: an in-memory H2 database, schema created at startup, all data lost on restart. Interactive API docs are served by springdoc at `/swagger-ui.html` (spec at `/v3/api-docs`).
 
-See **Status** below before running: the current commit has build problems.
+Lombok runs inside `javac`, so the Lombok version in `pom.xml` has to support the JDK you build with. Lombok 1.18.32 supports up to JDK 22, and JDK 24 needs 1.18.38 or newer. A mismatch fails the build with `java.lang.ExceptionInInitializerError: com.sun.tools.javac.code.TypeTag :: UNKNOWN`.
 
 ---
 
@@ -101,26 +101,3 @@ See **Status** below before running: the current commit has build problems.
 ### 7. Testability
 - Constructor injection is used consistently, which makes the services easy to unit test with mocked repositories.
 - `spring-boot-starter-test` is declared but there are no tests yet.
-
----
-
-## Status
-
-Known issues in the current commit:
-
-- **Does not compile:** `ReservationMapper` no longer matches the model and DTOs. It calls `User.getName()` (the field is `fullName`), `ServiceOffering.getName()` and `getDurationMinutes()` (the model has `serviceName` and no duration), and it calls DTO constructors with argument lists that do not exist (`UserListItemDTO`, `ProviderListItemDTO`, `ServiceOfferingListItemDTO`, `ReservationResponseDTO`).
-- **Would not start:** `ReservationRepository.findByClientId` refers to a `client` property, but `Reservation` has `user`. Spring Data derives the query at startup and fails. The same leftover naming is in the `/reservations/client/{clientId}` endpoint.
-- Unused so far: `ReservationMapper`, the provider DTOs, `ReservationCreateDTO`, `ReservationListItemDTO`.
-- No tests and no `application.properties`.
-
-## Roadmap
-
-1. Fix the two issues above and add an integration test that boots the context.
-2. Enforce the booking invariants in the database (unique `(provider_id, reservation_time)` and `(user_id, reservation_time)`), wrap `create` in `@Transactional`, and map `DataIntegrityViolationException` to `409`.
-3. Concurrency test: N threads book the same slot (`ExecutorService` + `CountDownLatch`); expected result is exactly one `201` and N-1 `409`.
-4. Model reservations as intervals with a duration on `ServiceOffering`; use `Instant` or `ZonedDateTime` and an injected `Clock`.
-5. DTOs for every resource, `@Valid` at the controllers, constraints on the DTOs, and `@Positive` plus explicit precision/scale on `price`.
-6. One error model: `NotFoundException` everywhere, handlers for validation, unreadable body and data integrity errors, logging for 500s, no raw exception messages in responses.
-7. Pagination, `@EntityGraph` or fetch joins for list endpoints, and `spring.jpa.open-in-view=false`.
-8. Explicit `application.properties` and profiles.
-9. Measure before optimizing: load-test the booking endpoint and report throughput and p50/p95/p99 latency.
